@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../utils/face_overlay.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import '../main.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class CameraView extends StatefulWidget {
   const CameraView(
@@ -35,6 +37,7 @@ class _CameraViewState extends State<CameraView> {
   CameraController? _controller;
   int _cameraIndex = 0;
   List<CameraDescription>? _cameras;
+  List<String>? _images;
 
   @override
   void initState() {
@@ -158,7 +161,14 @@ class _CameraViewState extends State<CameraView> {
         await Future.delayed(const Duration(milliseconds: 500));
         _controller!.takePicture().then((XFile? file) {
           widget.onCapture!(File(file!.path));
+          
+          List<int> imageBytes = file.readAsBytesSync();
+          print(imageBytes);
+          String base64Image = base64Encode(imageBytes);
 
+          SearchImage(base64Image);
+
+             
           Future.delayed(const Duration(seconds: 2)).whenComplete(() {
             if (mounted) {
               _startLive();
@@ -172,7 +182,15 @@ class _CameraViewState extends State<CameraView> {
         _controller!.stopImageStream().whenComplete(() async {
           await Future.delayed(const Duration(milliseconds: 500));
           _controller!.takePicture().then((XFile? file) {
-            // Note pour Fama: ajouter le code qui envoie l'image vers l'api pour enregistrer l'image et le nom(accessible via widget.studentName)
+
+              List<int> imageBytes = file.readAsBytesSync();
+              print(imageBytes);
+              String base64Image = base64Encode(imageBytes);
+              _images.add(base64Image);
+              setState((){
+
+              });
+              
 
             Future.delayed(const Duration(seconds: 2)).whenComplete(() {
               if (mounted) {
@@ -182,6 +200,8 @@ class _CameraViewState extends State<CameraView> {
           });
         });
       }
+
+      UploadImage();
     }
   }
 
@@ -236,4 +256,73 @@ class _CameraViewState extends State<CameraView> {
     await _controller?.stopImageStream();
     await _controller?.dispose();
   }
+
+   _displayDialog(BuildContext context) async {
+    return showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Succeed'),
+            /*content: TextField(
+              controller: _textFieldController,
+              decoration: InputDecoration(hintText: "Enter Name"),
+            ),*/
+            actions: [
+              TextButton(
+                child: const Text('OK'),
+                /*onPressed: () {
+                  setState(() {
+                    _studentName = _textFieldController.text;
+                  });*/
+                  Navigator.of(context).pop();
+                },
+              )
+            ],
+          );
+        });
+  }
+
+  SearchImage(image_base64) async {
+    
+    final url = Uri.parse("http://127.0.0.1:5000/searchUser");
+    final headers = {'Content-Type': 'application/json'};
+    final body = {'nameUser': widget.studentName, 'photoInconnu': image_base64};
+
+    http.post(url, headers: headers, body: json.encode(body)).then((response) {
+      if (response.statusCode == 200) {
+        // Request successful, handle response
+        _displayDialog(context);
+
+      } else {
+        // Request failed, handle error
+        print('Error');
+      }
+    });
+  }
+  UploadImage() async {
+    /*String api_url = "http://127.0.0.1:5000/saveUser";
+    var url = Uri.parse(api_url);
+    var request = http.MultipartRequest("POST", url);
+
+    request.fields["nameUser"] = widget.studentName;
+    request.fields["photoUser"] = _images;
+    
+    var response = await request.send*/
+
+    final url = Uri.parse("http://127.0.0.1:5000/saveUser");
+    final headers = {'Content-Type': 'application/json'};
+    final body = {'nameUser': widget.studentName, 'photoUser': _images};
+
+    http.post(url, headers: headers, body: json.encode(body)).then((response) {
+      if (response.statusCode == 200) {
+        // Request successful, handle response
+        _displayDialog(context);
+
+      } else {
+        // Request failed, handle error
+        print('Error');
+      }
+    });
+  }
 }
+
